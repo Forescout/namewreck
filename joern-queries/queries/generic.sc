@@ -63,32 +63,36 @@ object Generic {
         struct.condition.ast.isLiteral.filter(_.code.toLowerCase == "0xc0").astParent.isCall.name("<operator>.and").nonEmpty
     }
 
-	/*
+    /*
     Returns "true" if the first identifier that is a part of an expression is not
     being checked before the expression may be called. 
 
     This function is specific to DNS compression functions, and might not work as
     expected for more generic code.
-	*/
-	def isExprNotChecked(expr: Expression): Boolean = {
-	    val id2Check = expr.ast.isIdentifier.head
+    */
+    def isExprNotChecked(expr: Expression): Boolean = {
+        try {
+            val id2Check = expr.ast.isIdentifier.head
 
-		val checks = expr.dominatedBy.isCall.dedup.where { x =>
-			x.ast.astParent.isControlStructure
-        }.filter { x =>
-            Generic.findIdentifier(id2Check.code, x) != null
-        }.filterNot { x =>
-            Generic.isDomainNameCompressionCheck(x.ast.astParent.isControlStructure.head)
-        }.whereNot { x => 
-            val control = x.ast.astParent.isControlStructure
-            control.code("while\\s*\\(\\s*(.*!=\\s*(0x00|0|'\\\\0')|\\*.[a-zA-Z]*)\\s*\\)")
+            val checks = expr.dominatedBy.isCall.dedup.where { x =>
+                x.ast.astParent.isControlStructure
+            }.filter { x =>
+                Generic.findIdentifier(id2Check.code, x) != null
+            }.filterNot { x =>
+                Generic.isDomainNameCompressionCheck(x.ast.astParent.isControlStructure.head)
+            }.whereNot { x => 
+                val control = x.ast.astParent.isControlStructure
+                control.code("while\\s*\\(\\s*(.*!=\\s*(0x00|0|'\\\\0')|\\*.[a-zA-Z]*)\\s*\\)")
+            }
+
+            (checks.size == 0)
+        } catch {
+            case _: Throwable => false
         }
-
-		(checks.size == 0)
-	}
+    }
 
 
-	/*
+    /*
     Returns "true" if an identifier (node) might be "used" within an expression
     ("root"). For example, the function will return "true" if a pointer dereference
     operation has been used on the identifier, or array access, or the identifier
@@ -96,36 +100,36 @@ object Generic {
 
     This function is specific to DNS compression functions, and might not work as
     expected for more generic code.
-	*/
-	def isUsage(node: AstNode, root: Expression): Boolean = {
-		node match {
-			case id: Identifier => 
-				isUsage(id.ast.astParent.head, root)
-			case call: Call =>
-				if (call.name == "<operator>.indirection" ||            // pointer dereference
-					call.name == "<operator>.indirectIndexAccess" ||    // array access
+    */
+    def isUsage(node: AstNode, root: Expression): Boolean = {
+        node match {
+            case id: Identifier => 
+                isUsage(id.ast.astParent.head, root)
+            case call: Call =>
+                if (call.name == "<operator>.indirection" ||            // pointer dereference
+                    call.name == "<operator>.indirectIndexAccess" ||    // array access
                     call.name.toLowerCase == "strlen" ||                // an argument to the "strlen()" call 
-					call.name == root.method.name) { 	                // an argument to the recursive call
-					true
-				}
-				else {
-					isUsage(call.ast.astParent.head, root)
-				}
-			case _ => false
-		}
-	}
+                    call.name == root.method.name) {                    // an argument to the recursive call
+                    true
+                }
+                else {
+                    isUsage(call.ast.astParent.head, root)
+                }
+            case _ => false
+        }
+    }
 
 
     /*
     Returns an identifier from an expression by its code string.
     Returns "null" if no such identifier exists within the expression provided.
     */
-	def findIdentifier(idStr: String, root: Expression): Identifier = {
-		root.astMinusRoot.isIdentifier.foreach { id =>
-			if (id.code == idStr) return id	
-		}
-		null
-	}
+    def findIdentifier(idStr: String, root: Expression): Identifier = {
+        root.astMinusRoot.isIdentifier.foreach { id =>
+            if (id.code == idStr) return id 
+        }
+        null
+    }
 
     /*
     Prints a warning if one of the code smells has been detected

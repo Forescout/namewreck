@@ -47,8 +47,8 @@ import io.shiftleft.semanticcpg.language.operatorextension.opnodes.Assignment
 class DNSVulnCodeSmells {
 
     /*
-		This function returns a Traversal that contains all potential checks for a
-		compressed domain name label
+        This function returns a Traversal that contains all potential checks for a
+        compressed domain name label
     */
 
     private def getCompressionChecks(): Traversal[ControlStructure]  = {
@@ -129,23 +129,23 @@ class DNSVulnCodeSmells {
         // get all potential compression checks
         var compressionChecks = getCompressionChecks()
 
-		compressionChecks.foreach { compCheck =>
+        compressionChecks.foreach { compCheck =>
             var taintedId: Identifier = null
             var assignments: Buffer[Assignment]  = null
 
             // Find all assignments dominated by a compression check.
-			var dominatedByCompCheck = compCheck.condition.dominates.assignments.toSet
+            var dominatedByCompCheck = compCheck.condition.dominates.assignments.toSet
 
             // Find an assignment that might be a compression pointer offset
             // computation.
-			var offsetComputation = dominatedByCompCheck.where { x => 
-				x.source.ast.isIdentifier.filter { y => 
+            var offsetComputation = dominatedByCompCheck.where { x => 
+                x.source.ast.isIdentifier.filter { y => 
                     Generic.findIdentifier(y.code, compCheck.condition.head) != null
-				}
-			}.filterNot { x => 
+                }
+            }.filterNot { x => 
                 ".*\\s*(?:&|&=)\\s*(?:~0xc0|~0x00c0|0x3f|0x003f|0x3fff)".r.findFirstIn(x.code.toLowerCase()).isEmpty && 
                 ".*\\s*(?:0xc0|0x00c0|0x3f|0x003f|0x3fff)\\s*&".r.findFirstIn(x.code.toLowerCase()).isEmpty
-			}.toSet
+            }.toSet
 
             // If we didn't find the usual expression that computes offsets, the code might
             // ignore compressed labels and attempt to skip past them. Therefore, we need to
@@ -169,45 +169,45 @@ class DNSVulnCodeSmells {
                           |to the offset computation going out of bounds of the DNS packet. Therefore, each
                           |implementation that deals with compressed DNS names must be examined carefully.
                           |""".stripMargin
-				Generic.printWarning(msg, offsetComputation.head)
+                Generic.printWarning(msg, offsetComputation.head)
             }
 
             // Try to determine a proper "source" of the data
             if (offsetComputation.size > 0) {
                 val offset = offsetComputation.head
-				dominatedByCompCheck -= offset
+                dominatedByCompCheck -= offset
 
-				taintedId = offset.ast.isIdentifier.head
+                taintedId = offset.ast.isIdentifier.head
 
-				assignments = dominatedByCompCheck.toSeq.sortBy{ x => 
-					x.lineNumber.get 
-				}.filter{ x => 
-					x.lineNumber.get > offset.lineNumber.get 
-				}.toBuffer
+                assignments = dominatedByCompCheck.toSeq.sortBy{ x => 
+                    x.lineNumber.get 
+                }.filter{ x => 
+                    x.lineNumber.get > offset.lineNumber.get 
+                }.toBuffer
             }
             else {
                 taintedId = compCheck.ast.isIdentifier.head
 
-				assignments = dominatedByCompCheck.toSeq.sortBy{ x => 
-					x.lineNumber.get 
-				}.toBuffer
+                assignments = dominatedByCompCheck.toSeq.sortBy{ x => 
+                    x.lineNumber.get 
+                }.toBuffer
             }
 
             if (taintedId != null && assignments != null) {
 
                 // Find the affected "memcpy()" calls 
-				val memcpyCalls = compCheck.method.call.filter { call =>
-					Generic.memcpyCallNames.exists(call.name.toLowerCase.contains(_))
-				}
+                val memcpyCalls = compCheck.method.call.filter { call =>
+                    Generic.memcpyCallNames.exists(call.name.toLowerCase.contains(_))
+                }
 
-				memcpyCalls.foreach { sink => 
-					val sinkFlows = sink.argument(3).reachableByFlows(taintedId).toSet
-					val isSinkReachable = !sinkFlows.isEmpty || (Generic.findIdentifier(taintedId.code, sink.argument(3)) != null)
-					
-					val argUnchecked = Generic.isExprNotChecked(sink.argument(3))
+                memcpyCalls.foreach { sink => 
+                    val sinkFlows = sink.argument(3).reachableByFlows(taintedId).toSet
+                    val isSinkReachable = !sinkFlows.isEmpty || (Generic.findIdentifier(taintedId.code, sink.argument(3)) != null)
+                    
+                    val argUnchecked = Generic.isExprNotChecked(sink.argument(3))
 
-					if (isSinkReachable && argUnchecked) {
-						val msg2 = """
+                    if (isSinkReachable && argUnchecked) {
+                        val msg2 = """
                                    |--------------------------------------------------------------------------------
                                    |WARNING: UNCKECTED DNS NAME LABEL LENGTH USED IN A "MEMCPY()" CALL.
                                    |--------------------------------------------------------------------------------
@@ -217,9 +217,9 @@ class DNSVulnCodeSmells {
                                    |achieve Denial-of-Service conditions or allowing for Remote Code Execution
                                    |attacks.
                                    |""".stripMargin
-						Generic.printWarning(msg2, sink)
-					}
-				}
+                        Generic.printWarning(msg2, sink)
+                    }
+                }
 
                 // Find the afected assignments
                 while (assignments.size != 0) {
@@ -252,7 +252,7 @@ class DNSVulnCodeSmells {
                     assignments -= currentAssignment
                 }
             }
-		}
+        }
     }
 }
 
